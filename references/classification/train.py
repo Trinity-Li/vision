@@ -1,5 +1,6 @@
 import datetime
 import os
+import sys
 import time
 import warnings
 
@@ -245,7 +246,22 @@ def main(args):
     )
 
     print("Creating model")
-    model = torchvision.models.get_model(args.model, weights=args.weights, num_classes=num_classes)
+    # --- 修改开始 ---
+    if args.model == 'resnet18_modified':
+        # --- 修改开始 ---
+        # 务必确认你的模型定义文件名为 resnet.py，且位于当前目录下
+        # 务必确认函数名为 resnet18_modified
+        #import sys
+        #import os
+        sys.path.append(os.getcwd())  # 确保当前目录在搜索路径中
+
+        from resnet import resnet18_modified  # 直接导入，不要 try/except
+
+        print(f"Creating custom model: {args.model}")
+        model = resnet18_modified(num_classes=num_classes)
+        # --- 修改结束 ---
+    else:
+        model = torchvision.models.get_model(args.model, weights=args.weights, num_classes=num_classes)
     model.to(device)
 
     if args.distributed and args.sync_bn:
