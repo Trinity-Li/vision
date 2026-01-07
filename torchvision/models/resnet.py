@@ -25,6 +25,7 @@ __all__ = [
     "Wide_ResNet50_2_Weights",
     "Wide_ResNet101_2_Weights",
     "resnet18",
+    "resnet18_modified",
     "resnet34",
     "resnet50",
     "resnet101",
@@ -983,3 +984,28 @@ def wide_resnet101_2(
 
     _ovewrite_named_param(kwargs, "width_per_group", 64 * 2)
     return _resnet(Bottleneck, [3, 4, 23, 3], weights, progress, **kwargs)
+
+
+# --- 请添加到 torchvision/models/resnet.py 的末尾 ---
+
+@register_model()
+def resnet18_modified(**kwargs: Any) -> ResNet:
+    """
+    Constructs a ResNet-18 model modified for small input images (like CIFAR-10/100).
+    Reference: RDED project (resnet18_modified)
+    """
+    # 1. 创建标准的 ResNet18 模型
+    # 注意：RDED 中通常不使用预训练权重进行初始化，所以这里我们默认 pretrained=False (即 weights=None)
+    model = resnet18(**kwargs)
+
+    # 2. 修改 conv1：使用 3x3 卷积，步长为 1，padding 为 1
+    # 原始 ResNet 是 7x7, stride 2, padding 3
+    model.conv1 = nn.Conv2d(
+        3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+    )
+
+    # 3. 移除 maxpool：替换为 Identity (恒等映射)
+    # 原始 ResNet 有一个 stride 2 的 MaxPool，这会过早降低小图的分辨率
+    model.maxpool = nn.Identity()
+
+    return model
