@@ -134,13 +134,22 @@ class FilelistDataset(Dataset):
             label = int(item.get('label'))
             if not raw_id: continue
 
-            # --- A. 提取纯文件名 ---
-            # 假设 raw_id 是 "/old/path/truck/36717.png_copy_1"
-            filename = os.path.basename(raw_id)  # 拿到 "36717.png_copy_1"
+            # --- 关键修改开始 ---
+            # 原始可能是: "/.../23182_r0.2_copy90.png"
+            base_name = os.path.basename(raw_id)
 
-            # --- B. 去除 _copy_ 后缀 ---
-            if '_copy_' in filename:
-                filename = filename.split('_copy_')[0]  # 拿到 "36717.png"
+            # 使用正则提取开头的数字 ID
+            # 逻辑：找到字符串开头的第一串数字
+            match = re.match(r'^(\d+)', base_name)
+
+            if match:
+                clean_id = match.group(1)  # 拿到 "23182"
+                filename = f"{clean_id}.png"  # 强制变成 "23182.png"
+            else:
+                # 如果没匹配到数字，回退到原始文件名（防止报错，虽然不太可能）
+                filename = base_name
+
+            # --- 关键修改结束 ---
 
             # --- C. 获取类别名 ---
             class_name = CIFAR_CLASSES[label]  # 拿到 "truck"
