@@ -84,45 +84,102 @@ class FilelistDataset(Dataset):
         self.samples = []
         self.transform = transform
 
+        # ========================================================
+        # 1. 定义新数据的根目录 (即你刚才运行 restore 脚本生成的目录)
+        # ========================================================
+        SPLIT_DATA_ROOT = '/root/autodl-tmp/eval/references/classification/cifar10_split_data'
+
+        # CIFAR-10 类别名 (用于构建路径)
+        CIFAR_CLASSES = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+
+        # 2. 自动判断是 Set A 还是 Set B
+        # 根据 .pt 文件名来猜。文件名里通常包含 'set_B' 或 'set_A'
+        if 'set_B' in os.path.basename(pt_path):
+            subset_folder = 'eval_set_B'
+        else:
+            subset_folder = 'eval_set_A'
+
+        print(f"📂 读取索引: {os.path.basename(pt_path)} -> 指向目录: {subset_folder}")
+
+        # 3. 加载 .pt 文件
         try:
             data = torch.load(pt_path, map_location='cpu')
         except Exception as e:
-            print(f"❌ 加载失败: {e}")
+            print(f"❌ .pt 文件加载失败: {e}")
             return
 
-        items = data if isinstance(data, list) else []
-        if isinstance(data, dict) and 'features' in data:
-            ids = data['ids']
-            lbls = data['labels']
+        # 4. 提取数据列表 (兼容不同格式)
+        items = []
+        if isinstance(data, dict):
+            # 你的文件可能是 {'ids': [...], 'labels': [...]} 或者是 {'features': ...}
+            if 'ids' in data:
+                ids = data['ids']
+                lbls = data['labels']
+            elif 'features' in data:  # 兼容你代码里的这种写法
+                ids = data['ids']
+                lbls = data['labels']
+            else:
+                print("❌ 字典格式无法识别，缺少 'ids'")
+                return
+
             for i in range(len(ids)):
                 items.append({'id': ids[i], 'label': int(lbls[i])})
 
+        elif isinstance(data, list):
+            items = data
+
+        # 5. 核心循环：构建新路径
         for item in items:
             raw_id = item.get('id')
             label = int(item.get('label'))
             if not raw_id: continue
 
-            # 路径清洗：去除 _copy_ 后缀，指向原始图片
-            real_path = raw_id
-            if '_copy_' in real_path:
-                real_path = real_path.split('_copy_')[0]
+            # --- A. 提取纯文件名 ---
+            # 假设 raw_id 是 "/old/path/truck/36717.png_copy_1"
+            filename = os.path.basename(raw_id)  # 拿到 "36717.png_copy_1"
+
+            # --- B. 去除 _copy_ 后缀 ---
+            if '_copy_' in filename:
+                filename = filename.split('_copy_')[0]  # 拿到 "36717.png"
+
+            # --- C. 获取类别名 ---
+            class_name = CIFAR_CLASSES[label]  # 拿到 "truck"
+
+            # --- D. 拼装成正确的新路径 ---
+            # 新路径 = 根目录 / eval_set_B / truck / 36717.png
+            real_path = os.path.join(SPLIT_DATA_ROOT, subset_folder, class_name, filename)
 
             self.samples.append((real_path, label))
+
+        print(f"   ✅ 成功索引 {len(self.samples)} 张图片")
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
+        # 1. 获取路径和标签
         path, label = self.samples[idx]
+
+        # 2. 检查文件是否存在 (这一步非常关键)
+        if not os.path.exists(path):
+            # 详细报错，告诉你到底缺哪个文件
+            raise FileNotFoundError(
+                f"🔥 图片缺失！\n"
+                f"  试图读取: {path}\n"
+                f"  原始索引: {self.samples[idx]}\n"
+                f"  请检查 /root/autodl-tmp/eval/references/classification/cifar10_split_data 下是否有文件？"
+            )
+
+        # 3. 安全打开图片
         try:
             img = Image.open(path).convert('RGB')
-        except:
-            img = Image.new('RGB', (32, 32))
+        except Exception as e:
+            raise RuntimeError(f"🔥 图片损坏无法打开: {path}\n  错误信息: {e}")
 
         if self.transform:
             img = self.transform(img)
-        return img, label
 
+        return img, label
 
 # ==========================================
 # 4. 模型修改函数
