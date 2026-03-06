@@ -34,7 +34,7 @@ class Args:
     def __init__(self):
         self.batch_size = 128
         self.epochs = 15  # 针对 CIFAR-10 结构调整后，训练可能需要稍多几轮
-        self.lr = 0.000001  # SGD 初始学习率
+        self.lr = 0.001  # SGD 初始学习率
         self.momentum = 0.9
         self.weight_decay = 5e-4  # CIFAR-10 常用 weight_decay
         self.print_freq = 50
